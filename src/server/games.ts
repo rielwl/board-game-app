@@ -210,12 +210,17 @@ async function refreshFromProvider(bggIds: number[], throwOnFailure: boolean): P
       await persistCatalogGames([...bases, ...fetched]);
     })();
 
-    for (const id of toFetch) {
-      inFlight.set(
-        id,
-        work.finally(() => inFlight.delete(id)),
-      );
-    }
+    // One shared entry for the whole batch, cleaned up when the work ends.
+    const tracked = work.finally(() => {
+      for (const id of toFetch) inFlight.delete(id);
+    });
+    // Nothing awaits the map entry unless a concurrent caller happens to pick
+    // it up, so its rejection has to be marked as handled here. Without this a
+    // provider outage produces an unhandled rejection per id, which Node turns
+    // into a fatal error and takes the server down with it — even though the
+    // failure itself is already handled below.
+    tracked.catch(() => undefined);
+    for (const id of toFetch) inFlight.set(id, tracked);
     waitFor.push(work);
   }
 

@@ -1,3 +1,4 @@
+import type { CatalogGame } from '@/domain/catalog/types';
 import type {
   Attendee,
   CandidateGame,
@@ -56,6 +57,39 @@ export function makeInput(overrides: Partial<RecommendationInput> = {}): Recomme
     attendees: [],
     offers: [],
     games: [],
+    ...overrides,
+  };
+}
+
+/**
+ * A complete `CatalogGame`, so catalog-persistence tests can state only the
+ * field under test. Kept next to the recommendation builders for the same
+ * reason: one place to absorb a shape change.
+ */
+export function makeCatalogGame(
+  overrides: Partial<CatalogGame> & { bggId: number },
+): CatalogGame {
+  return {
+    name: `Game ${overrides.bggId}`,
+    yearPublished: 2015,
+    imageUrl: null,
+    thumbnailUrl: null,
+    minPlayers: 2,
+    maxPlayers: 4,
+    playingTime: 60,
+    minPlayTime: 45,
+    maxPlayTime: 60,
+    minAge: 10,
+    averageRating: 7.5,
+    bayesRating: 7.1,
+    usersRated: 1000,
+    averageWeight: 2.4,
+    numWeightVotes: 200,
+    isExpansion: false,
+    baseGameBggIds: [],
+    mechanics: [],
+    categories: [],
+    playerPolls: [],
     ...overrides,
   };
 }
