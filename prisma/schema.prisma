@@ -1,0 +1,473 @@
+// Meeple Night — board game night organiser.
+//
+// Conventions used throughout:
+//  * cuid() string primary keys
+//  * every user-facing table carries createdAt/updatedAt
+//  * membership-scoped rows cascade from their Event or User
+//  * global Game rows are shared and are never cascade-deleted by a user action
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ---------------------------------------------------------------------------
+// Authentication (Better Auth core tables)
+// ---------------------------------------------------------------------------
+
+model User {
+  id            String   @id @default(cuid())
+  name          String
+  email         String   @unique
+  emailVerified Boolean  @default(false)
+  image         String?
+  // Optional and purely informational: lets the library page pre-fill a BGG
+  // collection import. A BGG password is never requested or stored.
+  bggUsername   String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  accounts       Account[]
+  sessions       Session[]
+  memberships    EventMember[]
+  createdEvents  Event[]           @relation("EventCreator")
+  createdInvites Invite[]          @relation("InviteCreator")
+  library        UserGame[]
+  offers         EventGameOffer[]
+  preferences    EventPreference[]
+  requests       GameRequest[]
+  selections     EventSelection[]  @relation("SelectionAuthor")
+  manualGames    Game[]            @relation("GameCreator")
+
+  @@map("user")
+}
+
+model Session {
+  id        String   @id @default(cuid())
+  userId    String
+  token     String   @unique
+  expiresAt DateTime
+  ipAddress String?
+  userAgent String?
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([expiresAt])
+  @@map("session")
+}
+
+model Account {
+  id                    String    @id @default(cuid())
+  userId                String
+  accountId             String
+  providerId            String
+  accessToken           String?
+  refreshToken          String?
+  accessTokenExpiresAt  DateTime?
+  refreshTokenExpiresAt DateTime?
+  scope                 String?
+  idToken               String?
+  // Better Auth stores the scrypt password hash here for the credential provider.
+  password              String?
+  createdAt             DateTime  @default(now())
+  updatedAt             DateTime  @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([providerId, accountId])
+  @@index([userId])
+  @@map("account")
+}
+
+model Verification {
+  id         String   @id @default(cuid())
+  identifier String
+  value      String
+  expiresAt  DateTime
+  createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
+
+  @@index([identifier])
+  @@map("verification")
+}
+
+// ---------------------------------------------------------------------------
+// Events
+// ---------------------------------------------------------------------------
+
+enum EventStatus {
+  ACTIVE
+  CANCELLED
+  ARCHIVED
+}
+
+enum EventRole {
+  ORGANIZER
+  ATTENDEE
+}
+
+enum RsvpStatus {
+  YES
+  MAYBE
+  NO
+  AWAITING
+}
+
+model Event {
+  id            String      @id @default(cuid())
+  title         String
+  description   String?
+  /// Absolute instant of the event start. `timezone` records the IANA zone the
+  /// organizer entered it in so it can be rendered back as local wall-clock time.
+  startsAt      DateTime
+  timezone      String      @default("UTC")
+  location      String
+  attendeeNotes String?
+  maxAttendees  Int?
+  status        EventStatus @default(ACTIVE)
+
+  // Organizer-tunable recommendation settings. All optional: when null the
+  // engine falls back to values derived from the attendee set.
+  targetPlayerCount  Int?
+  maxDurationMinutes Int?
+  complexityTarget   Float?
+
+  createdById String
+  createdBy   User   @relation("EventCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  members     EventMember[]
+  invites     Invite[]
+  offers      EventGameOffer[]
+  preferences EventPreference[]
+  requests    GameRequest[]
+  selection   EventSelection?
+
+  @@index([createdById])
+  @@index([startsAt])
+  @@index([status])
+}
+
+model EventMember {
+  id          String     @id @default(cuid())
+  eventId     String
+  userId      String
+  role        EventRole  @default(ATTENDEE)
+  rsvp        RsvpStatus @default(AWAITING)
+  rsvpNote    String?
+  respondedAt DateTime?
+  joinedAt    DateTime   @default(now())
+  updatedAt   DateTime   @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([eventId, rsvp])
+}
+
+model Invite {
+  id String @id @default(cuid())
+
+  eventId String
+  event   Event  @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  /// SHA-256 of the invite token. Lookups happen on this column only, so a
+  /// stolen database dump cannot be replayed directly as a working invite link.
+  tokenHash   String @unique
+  /// AES-256-GCM ciphertext of the same token, keyed by INVITE_ENCRYPTION_KEY.
+  /// Lets the organizer re-copy the link without plaintext sitting at rest.
+  tokenCipher String
+
+  expiresAt DateTime?
+  revokedAt DateTime?
+  maxUses   Int?
+  useCount  Int       @default(0)
+
+  createdById String
+  createdBy   User   @relation("InviteCreator", fields: [createdById], references: [id], onDelete: Cascade)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  @@index([eventId])
+}
+
+// ---------------------------------------------------------------------------
+// Games (global catalog, shared across users)
+// ---------------------------------------------------------------------------
+
+enum GameSource {
+  BGG
+  MANUAL
+}
+
+enum TagKind {
+  MECHANIC
+  CATEGORY
+}
+
+model Game {
+  id String @id @default(cuid())
+
+  /// BoardGameGeek object id. Null for manually entered games.
+  bggId  Int?       @unique
+  bggUrl String?
+  source GameSource @default(MANUAL)
+
+  name          String
+  yearPublished Int?
+  imageUrl      String?
+  thumbnailUrl  String?
+
+  minPlayers  Int?
+  maxPlayers  Int?
+  playingTime Int?
+  minPlayTime Int?
+  maxPlayTime Int?
+  minAge      Int?
+
+  averageRating  Float?
+  /// BGG Bayesian ("geek") rating.
+  bayesRating    Float?
+  usersRated     Int?
+  /// BGG community weight, 1..5.
+  averageWeight  Float?
+  numWeightVotes Int?
+
+  /// Expansions are never standalone candidates; they only qualify when their
+  /// base game is also on the table.
+  isExpansion Boolean @default(false)
+
+  /// Last successful metadata refresh from the catalog provider. Drives the TTL.
+  lastFetchedAt DateTime?
+
+  createdById String?
+  createdBy   User?   @relation("GameCreator", fields: [createdById], references: [id], onDelete: SetNull)
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  tags        GameTag[]
+  playerPolls GamePlayerPoll[]
+  /// Rows where this game is the expansion.
+  baseGames   GameRelation[]   @relation("ExpansionSide")
+  /// Rows where this game is the base game.
+  expansions  GameRelation[]   @relation("BaseSide")
+
+  ownedBy           UserGame[]
+  offers            EventGameOffer[]
+  requests          GameRequest[]
+  primarySelections EventSelection[] @relation("PrimaryGame")
+  backup1Selections EventSelection[] @relation("BackupOneGame")
+  backup2Selections EventSelection[] @relation("BackupTwoGame")
+
+  @@index([name])
+  @@index([isExpansion])
+  @@index([lastFetchedAt])
+}
+
+model Tag {
+  id       String  @id @default(cuid())
+  kind     TagKind
+  name     String
+  bggTagId Int?
+
+  games GameTag[]
+
+  @@unique([kind, name])
+  @@index([kind])
+}
+
+model GameTag {
+  gameId String
+  tagId  String
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+  tag  Tag  @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([gameId, tagId])
+  @@index([tagId])
+}
+
+/// Community "recommended player count" poll results, one row per player count.
+model GamePlayerPoll {
+  id             String @id @default(cuid())
+  gameId         String
+  playerCount    Int
+  best           Int    @default(0)
+  recommended    Int    @default(0)
+  notRecommended Int    @default(0)
+
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([gameId, playerCount])
+}
+
+/// Directed expansion -> base game relationship, as supplied by BGG.
+model GameRelation {
+  id String @id @default(cuid())
+
+  expansionId String
+  expansion   Game   @relation("ExpansionSide", fields: [expansionId], references: [id], onDelete: Cascade)
+
+  baseGameId String
+  baseGame   Game   @relation("BaseSide", fields: [baseGameId], references: [id], onDelete: Cascade)
+
+  @@unique([expansionId, baseGameId])
+  @@index([baseGameId])
+}
+
+// ---------------------------------------------------------------------------
+// Ownership, offers and preferences
+// ---------------------------------------------------------------------------
+
+enum Familiarity {
+  NEVER_PLAYED
+  PLAYED
+  CAN_TEACH
+}
+
+model UserGame {
+  id     String @id @default(cuid())
+  userId String
+  gameId String
+
+  /// Whether the owner could physically bring this game right now.
+  available   Boolean     @default(true)
+  familiarity Familiarity @default(NEVER_PLAYED)
+  notes       String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game Game @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([userId, gameId])
+  @@index([gameId])
+}
+
+/// An explicit promise to bring a game to a specific event. Owning a game does
+/// not imply an offer.
+model EventGameOffer {
+  id      String  @id @default(cuid())
+  eventId String
+  userId  String
+  gameId  String
+  note    String?
+
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, gameId])
+  @@index([eventId, gameId])
+  @@index([userId])
+}
+
+enum NoveltyPreference {
+  FAMILIAR
+  NEW
+  EITHER
+}
+
+model EventPreference {
+  id      String @id @default(cuid())
+  eventId String
+  userId  String
+
+  minComplexity     Float?
+  maxComplexity     Float?
+  maxPlayTime       Int?
+  noveltyPreference NoveltyPreference @default(EITHER)
+  note              String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([userId])
+}
+
+/// "I would specifically like to play this" for one event.
+model GameRequest {
+  id      String @id @default(cuid())
+  eventId String
+  userId  String
+  gameId  String
+
+  createdAt DateTime @default(now())
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  user  User  @relation(fields: [userId], references: [id], onDelete: Cascade)
+  game  Game  @relation(fields: [gameId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId, gameId])
+  @@index([eventId, gameId])
+}
+
+enum SelectionMethod {
+  MANUAL
+  PICK_FOR_US
+}
+
+model EventSelection {
+  id      String @id @default(cuid())
+  eventId String @unique
+
+  primaryGameId String
+  backup1GameId String?
+  backup2GameId String?
+
+  method SelectionMethod @default(MANUAL)
+  notes  String?
+
+  /// Deliberate snapshot: the score the primary game had at lock time, so the
+  /// "Tonight" view stays stable even if RSVPs change afterwards.
+  primaryScoreSnapshot Float?
+
+  selectedById String
+  lockedAt     DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  event       Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  selectedBy  User  @relation("SelectionAuthor", fields: [selectedById], references: [id], onDelete: Cascade)
+  primaryGame Game  @relation("PrimaryGame", fields: [primaryGameId], references: [id], onDelete: Restrict)
+  backup1Game Game? @relation("BackupOneGame", fields: [backup1GameId], references: [id], onDelete: Restrict)
+  backup2Game Game? @relation("BackupTwoGame", fields: [backup2GameId], references: [id], onDelete: Restrict)
+
+  @@index([selectedById])
+}
+
+// ---------------------------------------------------------------------------
+// Rate limiting
+// ---------------------------------------------------------------------------
+
+/// Simple database-backed fixed-window counter. Used for sign-in attempts and
+/// invite redemption so that a process restart does not reset the window.
+model RateLimitHit {
+  id        String   @id @default(cuid())
+  bucket    String
+  windowKey String
+  count     Int      @default(1)
+  expiresAt DateTime
+
+  @@unique([bucket, windowKey])
+  @@index([expiresAt])
+}

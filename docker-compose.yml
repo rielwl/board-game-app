@@ -1,0 +1,22 @@
+services:
+  postgres:
+    image: postgres:17-alpine
+    container_name: meeple-night-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: meeple
+      POSTGRES_PASSWORD: meeple
+      POSTGRES_DB: meeple_night
+    # 5433 on the host so this does not collide with a local Postgres on 5432.
+    ports:
+      - '5433:5432'
+    volumes:
+      - meeple-night-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U meeple -d meeple_night']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+volumes:
+  meeple-night-pgdata:

@@ -1,0 +1,115 @@
+@import 'tailwindcss';
+
+/*
+ * Meeple Night's visual language: warm paper, ink, and a coral accent, with a
+ * teal secondary for "confirmed" states. Everything is defined as a token so
+ * light and dark stay in step and contrast stays checkable in one place.
+ */
+@theme {
+  --color-paper: #fdf8f2;
+  --color-paper-raised: #ffffff;
+  --color-paper-sunken: #f5ece1;
+  --color-ink: #2b2118;
+  --color-ink-soft: #6b5b4c;
+  --color-line: #e5d8c8;
+
+  --color-coral-50: #fff2ee;
+  --color-coral-100: #ffe0d6;
+  --color-coral-500: #e2603c;
+  --color-coral-600: #c94a29;
+  --color-coral-700: #a53a1e;
+
+  --color-teal-50: #eaf6f3;
+  --color-teal-100: #cfeae3;
+  --color-teal-600: #1f7a68;
+  --color-teal-700: #165c4e;
+
+  --color-amber-50: #fdf3dd;
+  --color-amber-600: #a06a10;
+  --color-amber-700: #7d5209;
+
+  --color-slate-tint: #eef1f5;
+  --color-slate-deep: #445064;
+
+  --radius-card: 1rem;
+  --font-display: 'Trebuchet MS', 'Segoe UI', system-ui, sans-serif;
+}
+
+:root {
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    color-scheme: dark;
+  }
+}
+
+html {
+  /* Never remove the focus ring; the styles below only make it prettier. */
+  scroll-behavior: smooth;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  html {
+    scroll-behavior: auto;
+  }
+
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+body {
+  background-color: var(--color-paper);
+  color: var(--color-ink);
+  font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
+  min-height: 100dvh;
+}
+
+h1,
+h2,
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* A single, unmistakable focus ring for every interactive element. */
+:where(a, button, input, select, textarea, summary, [tabindex]):focus-visible {
+  outline: 3px solid var(--color-coral-600);
+  outline-offset: 2px;
+  border-radius: 0.375rem;
+}
+
+/* Skip link: hidden until focused. */
+.skip-link {
+  position: absolute;
+  left: 0.5rem;
+  top: -4rem;
+  z-index: 50;
+  background: var(--color-ink);
+  color: var(--color-paper);
+  padding: 0.625rem 1rem;
+  border-radius: 0.5rem;
+  transition: top 0.15s ease-in-out;
+}
+
+.skip-link:focus {
+  top: 0.5rem;
+}
+
+/* Subtle paper texture behind the whole app, purely decorative. */
+.paper-grain::before {
+  content: '';
+  position: fixed;
+  inset: 0;
+  pointer-events: none;
+  opacity: 0.35;
+  background-image: radial-gradient(var(--color-line) 1px, transparent 1px);
+  background-size: 22px 22px;
+  z-index: 0;
+}
