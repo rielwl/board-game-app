@@ -3,7 +3,7 @@
 import type { ReactNode } from 'react';
 import { useFormStatus } from 'react-dom';
 
-import type { ActionState } from '@/server/actions/shared';
+import type { ActionState } from '@/server/actions/state';
 
 import { Alert, buttonStyles, cx } from './ui';
 

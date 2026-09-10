@@ -3,7 +3,7 @@
 import { useActionState } from 'react';
 
 import { savePreferencesAction } from '@/server/actions/event-games';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 
 import { FormFeedback, SubmitButton } from './form';
 import { Field, cx, describedBy, inputStyles } from './ui';

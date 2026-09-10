@@ -4,7 +4,7 @@ import { useActionState } from 'react';
 import type { EventStatus } from '@prisma/client';
 
 import { setEventStatusAction } from '@/server/actions/events';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 
 import { FormFeedback, SubmitButton } from './form';
 

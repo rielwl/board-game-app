@@ -1,51 +1,19 @@
 import 'server-only';
 
-import type { z } from 'zod';
-
 import { AuthorizationError } from '@/lib/authz';
 
+import { failure } from './state';
+import type { ActionState } from './state';
+
 /**
- * The shape every server action returns, so `useActionState` forms can render
- * errors consistently and accessibly.
+ * Server-side action helpers.
+ *
+ * The plain data half — the `ActionState` type, `idleState`, and the small
+ * constructors — lives in `./state`, which client components import. This
+ * module is the part that may touch server-only code.
  */
-export type ActionState = {
-  status: 'idle' | 'success' | 'error';
-  message: string | null;
-  fieldErrors: Record<string, string[]>;
-  /** Optional payload, used by "Pick for us" to hand its draw back to the UI. */
-  data?: unknown;
-};
-
-export const idleState: ActionState = { status: 'idle', message: null, fieldErrors: {} };
-
-export const success = (message: string | null = null, data?: unknown): ActionState => ({
-  status: 'success',
-  message,
-  fieldErrors: {},
-  data,
-});
-
-export const failure = (
-  message: string,
-  fieldErrors: Record<string, string[]> = {},
-): ActionState => ({ status: 'error', message, fieldErrors });
-
-export function fieldErrorsFrom(error: z.ZodError): Record<string, string[]> {
-  const out: Record<string, string[]> = {};
-  for (const issue of error.issues) {
-    const key = issue.path.join('.') || '_form';
-    out[key] = [...(out[key] ?? []), issue.message];
-  }
-  return out;
-}
-
-export function firstMessage(fieldErrors: Record<string, string[]>): string {
-  for (const messages of Object.values(fieldErrors)) {
-    const message = messages[0];
-    if (message) return message;
-  }
-  return 'Please check the form and try again.';
-}
+export { failure, fieldErrorsFrom, firstMessage, idleState, success } from './state';
+export type { ActionState } from './state';
 
 /**
  * Wraps an action body so authorization failures and unexpected errors become

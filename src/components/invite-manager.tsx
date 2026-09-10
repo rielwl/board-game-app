@@ -3,7 +3,7 @@
 import { useActionState } from 'react';
 
 import { createInviteAction, revokeInviteAction } from '@/server/actions/invites';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 import type { InviteView } from '@/server/invites';
 
 import { CopyLink } from './copy-link';

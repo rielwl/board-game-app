@@ -4,7 +4,7 @@ import { useActionState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 
 import { joinEventAction } from '@/server/actions/invites';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 
 import { FormFeedback, SubmitButton } from './form';
 

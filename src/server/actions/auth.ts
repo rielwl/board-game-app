@@ -51,10 +51,12 @@ export async function signUpAction(
     }
 
     const requestHeaders = await headers();
+    // Per source address. Generous enough that a household or office behind one
+    // NAT is not locked out, tight enough to stop bulk account creation.
     const limit = await consumeRateLimit({
       bucket: 'sign-up',
       key: clientIpFrom(requestHeaders),
-      limit: 10,
+      limit: 20,
       windowSeconds: 3600,
     });
     if (!limit.allowed) {

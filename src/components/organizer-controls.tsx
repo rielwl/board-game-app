@@ -10,7 +10,7 @@ import {
   type PickForUsPayload,
 } from '@/server/actions/event-games';
 import { updateRecommendationSettingsAction } from '@/server/actions/events';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 
 import { FormFeedback, SubmitButton } from './form';
 import { Alert, Field, describedBy, inputStyles } from './ui';
@@ -259,6 +259,7 @@ export function PickForUs({ eventId, canPick }: { eventId: string; canPick: bool
       {payload ? (
         <div
           aria-live="polite"
+          data-testid="pick-result"
           className="rounded-xl border-2 border-[var(--color-teal-600)] bg-[var(--color-teal-50)] p-4"
         >
           <p className="text-sm text-[var(--color-teal-700)]">The dice say…</p>

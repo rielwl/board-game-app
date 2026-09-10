@@ -4,7 +4,7 @@ import { useActionState } from 'react';
 import Link from 'next/link';
 
 import { signInAction, signUpAction } from '@/server/actions/auth';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 
 import { FormFeedback, SubmitButton } from './form';
 import { Field, describedBy, inputStyles } from './ui';

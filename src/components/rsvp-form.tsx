@@ -4,7 +4,7 @@ import { useActionState, useState } from 'react';
 import type { RsvpStatus } from '@prisma/client';
 
 import { setRsvpAction } from '@/server/actions/events';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 
 import { FormFeedback, SubmitButton } from './form';
 import { cx, inputStyles } from './ui';

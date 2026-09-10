@@ -9,13 +9,24 @@ import { toLocalInputValue } from '@/lib/validation';
 export const metadata: Metadata = { title: 'New game night' };
 export const dynamic = 'force-dynamic';
 
+/**
+ * A sensible starting point for the date field: 19:30, a week from now.
+ *
+ * Kept out of the component body deliberately. Reading the clock during render
+ * is impure, and React's lint rules rightly flag it; doing it here, before the
+ * component renders, keeps the render itself a pure function of its arguments.
+ */
+function suggestedStart(timeZone: string): string {
+  const suggested = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+  suggested.setHours(19, 30, 0, 0);
+  return toLocalInputValue(suggested, timeZone);
+}
+
 export default async function NewEventPage() {
   await requireUser('/events/new');
 
   const timezone = defaultTimezone();
-  // Default to 19:30 a week from now, which is a sane starting point to edit.
-  const suggested = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
-  suggested.setHours(19, 30, 0, 0);
+  const startsAtLocal = suggestedStart(timezone);
 
   return (
     <div className="mx-auto max-w-2xl">
@@ -30,7 +41,7 @@ export default async function NewEventPage() {
           values={{
             title: '',
             description: '',
-            startsAtLocal: toLocalInputValue(suggested, timezone),
+            startsAtLocal,
             timezone,
             location: '',
             attendeeNotes: '',

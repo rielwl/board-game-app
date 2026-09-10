@@ -3,7 +3,7 @@
 import { useActionState } from 'react';
 
 import { createEventAction, updateEventAction } from '@/server/actions/events';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 
 import { FormFeedback, SubmitButton } from './form';
 import { ButtonLink, Field, describedBy, inputStyles } from './ui';

@@ -132,16 +132,28 @@ export type JoinResult =
  * reset the RSVP you already gave.
  */
 export async function redeemInvite(token: string, userId: string): Promise<JoinResult> {
-  const check = await checkInvite(token);
-  if (!check.ok) return { ok: false, message: check.message };
+  // Resolve the token to an event first, then check membership *before*
+  // validating expiry and use limits. Someone who has already joined is a
+  // member regardless of the link's current state, so re-opening a link that
+  // has since expired or run out of uses should still just take them in.
+  const invite = await prisma.invite.findUnique({
+    where: { tokenHash: hashToken(token) },
+    select: { eventId: true },
+  });
+  if (!invite) {
+    return { ok: false, message: 'This invite link is not valid.' };
+  }
 
-  const existing = await prisma.eventMember.findUnique({
-    where: { eventId_userId: { eventId: check.eventId, userId } },
+  const alreadyJoined = await prisma.eventMember.findUnique({
+    where: { eventId_userId: { eventId: invite.eventId, userId } },
     select: { id: true },
   });
-  if (existing) {
-    return { ok: true, eventId: check.eventId, alreadyMember: true };
+  if (alreadyJoined) {
+    return { ok: true, eventId: invite.eventId, alreadyMember: true };
   }
+
+  const check = await checkInvite(token);
+  if (!check.ok) return { ok: false, message: check.message };
 
   try {
     await prisma.$transaction(async (tx) => {

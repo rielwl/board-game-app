@@ -3,7 +3,7 @@
 import { useActionState, useEffect, useId, useRef, useState, useTransition } from 'react';
 
 import { addCatalogGameAction } from '@/server/actions/library';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 import type { GameSearchHit } from '@/server/games';
 
 import { FormFeedback, SubmitButton } from './form';
@@ -32,12 +32,14 @@ export function GameSearch() {
   const inputId = useId();
   const requestId = useRef(0);
 
+  const trimmed = query.trim();
+  const tooShort = trimmed.length < 2;
+  // Derived rather than stored: clearing the box must hide stale results, and
+  // deriving it avoids a setState in the effect body (and the extra render).
+  const view: SearchState = tooShort ? { kind: 'idle' } : state;
+
   useEffect(() => {
-    const trimmed = query.trim();
-    if (trimmed.length < 2) {
-      setState({ kind: 'idle' });
-      return;
-    }
+    if (trimmed.length < 2) return;
 
     const id = ++requestId.current;
     const controller = new AbortController();
@@ -65,7 +67,7 @@ export function GameSearch() {
           catalogError: string | null;
         };
         setState({ kind: 'ready', hits: body.hits, catalogError: body.catalogError });
-      } catch (error) {
+      } catch {
         if (controller.signal.aborted) return;
         if (id !== requestId.current) return;
         setState({
@@ -79,7 +81,7 @@ export function GameSearch() {
       clearTimeout(timer);
       controller.abort();
     };
-  }, [query]);
+  }, [trimmed]);
 
   return (
     <div className="flex flex-col gap-3">
@@ -100,26 +102,26 @@ export function GameSearch() {
       <FormFeedback state={addState} />
 
       <div id={`${inputId}-status`} aria-live="polite" className="text-sm">
-        {state.kind === 'loading' ? (
+        {view.kind === 'loading' ? (
           <p className="text-[var(--color-ink-soft)]">Searching…</p>
         ) : null}
-        {state.kind === 'failed' ? <Alert tone="warning">{state.message}</Alert> : null}
-        {state.kind === 'ready' && state.catalogError ? (
+        {view.kind === 'failed' ? <Alert tone="warning">{view.message}</Alert> : null}
+        {view.kind === 'ready' && view.catalogError ? (
           <Alert tone="warning" title="BoardGameGeek is not answering">
-            {state.catalogError} Games already known to Meeple Night are still listed below, and
+            {view.catalogError} Games already known to Meeple Night are still listed below, and
             you can always add a game by hand.
           </Alert>
         ) : null}
-        {state.kind === 'ready' && state.hits.length === 0 ? (
+        {view.kind === 'ready' && view.hits.length === 0 ? (
           <p className="text-[var(--color-ink-soft)]">
             Nothing matched. Try a shorter search, or add the game manually below.
           </p>
         ) : null}
       </div>
 
-      {state.kind === 'ready' && state.hits.length > 0 ? (
+      {view.kind === 'ready' && view.hits.length > 0 ? (
         <ul className="flex flex-col gap-2">
-          {state.hits.map((hit) => (
+          {view.hits.map((hit) => (
             <li
               key={`${hit.source}-${hit.bggId ?? hit.id}`}
               className="flex flex-wrap items-center justify-between gap-2 rounded-xl border border-[var(--color-line)] px-3 py-2"

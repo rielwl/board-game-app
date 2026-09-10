@@ -8,7 +8,7 @@ import {
   removeUserGameAction,
   updateUserGameAction,
 } from '@/server/actions/library';
-import { idleState } from '@/server/actions/shared';
+import { idleState } from '@/server/actions/state';
 
 import { FormFeedback, SubmitButton } from './form';
 import { Field, describedBy, inputStyles } from './ui';
