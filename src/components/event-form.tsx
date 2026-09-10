@@ -1,12 +1,17 @@
 'use client';
 
-import { useActionState } from 'react';
+import { useActionState, useMemo, useState, useSyncExternalStore } from 'react';
 
+import { browserTimezone } from '@/lib/timezones';
+import { suggestedStartLocal } from '@/lib/validation';
 import { createEventAction, updateEventAction } from '@/server/actions/events';
 import { idleState } from '@/server/actions/state';
 
 import { FormFeedback, SubmitButton } from './form';
 import { ButtonLink, Field, describedBy, inputStyles } from './ui';
+
+/** The browser's timezone cannot change mid-session, so there is nothing to subscribe to. */
+const NEVER_CHANGES = () => () => {};
 
 export type EventFormValues = {
   eventId?: string;
@@ -31,6 +36,43 @@ export function EventForm({
   const [state, action] = useActionState(
     mode === 'create' ? createEventAction : updateEventAction,
     idleState,
+  );
+
+  // The server cannot know the organiser's zone — reading `Intl` there returns
+  // the *host's* zone, which is how a UTC deployment ended up defaulting every
+  // new event to Africa/Abidjan.
+  //
+  // `useSyncExternalStore` is the right tool: the browser's zone is external
+  // state the server cannot see. It renders the server's fallback during SSR
+  // and hydration, then the real value on the client, with no mismatch and no
+  // setState-in-an-effect. Both snapshots are stable strings, so React is free
+  // to call them on every render.
+  const detectedTimezone = useSyncExternalStore(
+    NEVER_CHANGES,
+    () => browserTimezone() ?? values.timezone,
+    () => values.timezone,
+  );
+  const suggestedStart = useSyncExternalStore(
+    NEVER_CHANGES,
+    () =>
+      mode === 'create' ? suggestedStartLocal(detectedTimezone) : values.startsAtLocal,
+    () => values.startsAtLocal,
+  );
+
+  // Detection only ever supplies the *initial* value. Once the organiser picks
+  // something, their choice wins.
+  const [timezoneChoice, setTimezoneChoice] = useState<string | null>(null);
+  const [startChoice, setStartChoice] = useState<string | null>(null);
+
+  const timezone = timezoneChoice ?? (mode === 'create' ? detectedTimezone : values.timezone);
+  const startsAtLocal = startChoice ?? suggestedStart;
+
+  // A zone can be missing from the canonical list (`UTC` always is), so fold
+  // the selected value in rather than letting the select silently fall back to
+  // its first option.
+  const zoneOptions = useMemo(
+    () => (timezones.includes(timezone) ? timezones : [timezone, ...timezones]),
+    [timezones, timezone],
   );
 
   return (
@@ -77,6 +119,7 @@ export function EventForm({
         <Field
           label="Starts"
           htmlFor="startsAtLocal"
+          hint={`Read as local time in ${timezone}.`}
           error={state.fieldErrors.startsAtLocal}
         >
           <input
@@ -84,11 +127,12 @@ export function EventForm({
             name="startsAtLocal"
             type="datetime-local"
             required
-            defaultValue={values.startsAtLocal}
+            value={startsAtLocal}
+            onChange={(event) => setStartChoice(event.target.value)}
             className={inputStyles}
             aria-describedby={describedBy(
               'startsAtLocal',
-              false,
+              true,
               Boolean(state.fieldErrors.startsAtLocal),
             )}
           />
@@ -97,18 +141,19 @@ export function EventForm({
         <Field
           label="Timezone"
           htmlFor="timezone"
-          hint="The start time above is read in this zone."
+          hint="The start time is read in this zone, and shown to attendees in it."
           error={state.fieldErrors.timezone}
         >
           <select
             id="timezone"
             name="timezone"
             required
-            defaultValue={values.timezone}
+            value={timezone}
+            onChange={(event) => setTimezoneChoice(event.target.value)}
             className={inputStyles}
             aria-describedby={describedBy('timezone', true, Boolean(state.fieldErrors.timezone))}
           >
-            {timezones.map((zone) => (
+            {zoneOptions.map((zone) => (
               <option key={zone} value={zone}>
                 {zone}
               </option>

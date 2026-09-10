@@ -146,6 +146,14 @@ names the base game either way.
 no weight, no rating and no player poll still scores, still ranks, and carries explicit warnings
 plus a reduced `confidence` figure. There are tests for each of those paths.
 
+**Timezones are the organiser's, never the host's.** An event stores an absolute `startsAt`
+plus the IANA zone it was entered in. The new-event form detects that zone in the *browser*
+via `useSyncExternalStore` — reading `Intl` on the server returns whatever zone the deployment
+runs in, which on a UTC host defaulted every event to `Africa/Abidjan`, because
+`Intl.supportedValuesOf('timeZone')` does not contain `UTC` and the unmatched `defaultValue`
+fell through to the first option. `supportedTimezones()` now always folds in `UTC` and the
+selected zone, and every rendered time names its zone. See issue #1.
+
 **Deliberate snapshot.** `EventSelection.primaryScoreSnapshot` records the score at lock time so
 the "Tonight" view stays stable if RSVPs change afterwards. It is the only derived value stored.
 
@@ -231,8 +239,8 @@ explanation, and manual entry is offered as the way forward.
 ## Testing
 
 ```bash
-npm test          # 151 unit and integration tests
-npm run test:e2e  # 7 end-to-end tests
+npm test          # 166 unit and integration tests
+npm run test:e2e  # 11 end-to-end tests
 ```
 
 The unit suite covers the recommendation engine (eligibility, every score component,

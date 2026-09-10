@@ -30,7 +30,10 @@ export default async function EditEventPage({
       <Card>
         <EventForm
           mode="edit"
-          timezones={supportedTimezones()}
+          // The stored zone may not be in the canonical list — `UTC` never is —
+          // so fold it in, or editing would silently rewrite it to the first
+          // option in the list.
+          timezones={supportedTimezones(event.timezone)}
           values={{
             eventId: event.id,
             title: event.title,

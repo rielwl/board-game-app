@@ -238,6 +238,9 @@ export function formatInZone(
     month: 'long',
     hour: 'numeric',
     minute: '2-digit',
+    // Always name the zone. A time shown without one is ambiguous to anybody
+    // reading it from somewhere else, which is half of what issue #1 was about.
+    timeZoneName: 'short',
   },
 ): string {
   try {
@@ -263,4 +266,38 @@ export function toLocalInputValue(instant: Date, timeZone: string): string {
       .map((part) => [part.type, part.value]),
   );
   return `${parts.year}-${parts.month}-${parts.day}T${parts.hour}:${parts.minute}`;
+}
+
+/**
+ * The date field's starting suggestion: 19:30, a week from today, expressed as
+ * a `datetime-local` string in `timeZone`.
+ *
+ * The calendar date is the one a week out *as seen in that zone*, so an
+ * organiser near the date line does not get yesterday. Doing this with
+ * `Date.setHours` would silently use the runtime's zone instead, which is the
+ * bug this function exists to avoid.
+ */
+export function suggestedStartLocal(timeZone: string, now: Date = new Date()): string {
+  const inAWeek = new Date(now.getTime() + 7 * 24 * 60 * 60 * 1000);
+
+  const format = (zone: string) =>
+    Object.fromEntries(
+      new Intl.DateTimeFormat('en-US', {
+        timeZone: zone,
+        year: 'numeric',
+        month: '2-digit',
+        day: '2-digit',
+      })
+        .formatToParts(inAWeek)
+        .map((part) => [part.type, part.value]),
+    );
+
+  let parts: Record<string, string>;
+  try {
+    parts = format(timeZone);
+  } catch {
+    parts = format('UTC');
+  }
+
+  return `${parts.year}-${parts.month}-${parts.day}T19:30`;
 }
