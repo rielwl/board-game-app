@@ -31,13 +31,18 @@ export async function runAction(body: () => Promise<ActionState>): Promise<Actio
   }
 }
 
+/**
+ * Next.js signals control flow by throwing an error carrying a `digest`:
+ * `NEXT_REDIRECT;...` from `redirect()`, and `NEXT_HTTP_ERROR_FALLBACK;<status>`
+ * from `notFound()`, `forbidden()` and `unauthorized()`. Catching one of these
+ * turns a 404 or a redirect into a generic "something went wrong" form error,
+ * so they have to be recognised and re-thrown.
+ */
+const CONTROL_FLOW_DIGEST_PREFIXES = ['NEXT_REDIRECT', 'NEXT_HTTP_ERROR_FALLBACK'];
+
 function isNextControlFlow(error: unknown): boolean {
-  return (
-    typeof error === 'object' &&
-    error !== null &&
-    'digest' in error &&
-    typeof (error as { digest?: unknown }).digest === 'string' &&
-    ((error as { digest: string }).digest.startsWith('NEXT_REDIRECT') ||
-      (error as { digest: string }).digest === 'NEXT_NOT_FOUND')
-  );
+  if (typeof error !== 'object' || error === null || !('digest' in error)) return false;
+  const digest = (error as { digest?: unknown }).digest;
+  if (typeof digest !== 'string') return false;
+  return CONTROL_FLOW_DIGEST_PREFIXES.some((prefix) => digest.startsWith(prefix));
 }
